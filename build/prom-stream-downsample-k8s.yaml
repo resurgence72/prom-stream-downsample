@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prom-stream-downsample-server-deploy
+  namespace: ops-sre
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: prom-stream-downsample-server-deploy
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8081"
+        prometheus.io/scrape: "true"
+      labels:
+        name: prom-stream-downsample-server-deploy
+    spec:
+      imagePullSecrets:
+        - name: alicloud-hub
+      volumes:
+        - name: prom-stream-downsample-cfg
+          configMap:
+            name: prom-stream-downsample-cfg
+      containers:
+        - name: prometheus-server-configmap-reload
+          image: "jimmidyson/configmap-reload:v0.5.0"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --volume-dir=/opt/app/config
+            - --webhook-url=http://127.0.0.1:9119/-/reload
+          volumeMounts:
+            - name: prom-stream-downsample-cfg
+              mountPath: /opt/app/config
+              readOnly: true
+        - name: prom-stream-downsample
+          args:
+            - -config=/opt/app/config/prom-stream-downsample.yaml
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9119
+          resources:
+            limits:
+              cpu: "300m"
+              memory: "300Mi"
+            requests:
+              cpu: "50m"
+              memory: "50Mi"
+          livenessProbe:
+            tcpSocket:
+              port: 9119
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 9119
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - mountPath: /opt/app/config
+              name: prom-stream-downsample-cfg
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prom-stream-downsample-cfg
+  namespace: ops-sre
+data:
+  prom-stream-downsample.yaml: |
+    global_config:
+      enabled_stream: true # 是否开启流式传输
+      enabled_proxy: true
+      enabled_downsample: false
+      prometheus:
+        remote_read_url: http://10.0.0.105:9090/api/v1/read  # row data 读地址
+        remote_write_url: http://10.0.0.105:9090/api/v1/write # downsample 结果写入地址
+      resolutions:
+        - 5m,7d
+        - 10m,15d
+        - 1h,30d
+    # 生成的 downsample 会重命名为 xxx:5m_avg/xxx:1h_p90
+    downsample_config:
+      - label_name: __name__  # {__name__=prom_rw_shard_series_drop_counter},将窗口内的点统一avg
+        label_value: prometheus_tsdb_head_chunks
+        matcher_type: =
+        aggregations:
+          - sum
+          - avg
+          - first
+          - last
+          - median
+          - mode
+          - min
+          - max
+          - random
+          - stddev
+          - sumsq
+          - count
+          - p90
+    proxy_config:
+      listen_addr: :9119
+      prometheus_addr: http://10.0.0.105:9090/
+      proxy_metrics:
+        - metric_name: prometheus_tsdb_head_chunks
+          aggregation: min
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prom-stream-downsample-svc-http
+  namespace: ops-sre
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9119
+      name: http
+      targetPort: 9119
+  selector:
+    name: prom-stream-downsample-server-deploy

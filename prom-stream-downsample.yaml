@@ -1,0 +1,57 @@
+global_config:
+#  enabled_stream: true # 是否开启流式传输
+  enabled_proxy: false
+  enabled_downsample: true
+  enabled_metric_reuse: true # 是否开启指标重用(下一级采样会用上一级的数据)
+
+  prometheus:
+    remote_read_url: http://172.18.12.38:9090/api/v1/read  # row data 读地址
+    remote_write_url: http://172.18.12.38:9090/api/v1/write # downsample 结果写入地址
+  resolutions:
+    - 5m,20m
+    - 20m,1h
+
+
+# 生成的 downsample 会重命名为 xxx:5m_avg/xxx:1h_p90
+downsample_config:
+  - job_name: downsample prometheus_engine_queries metrics
+    matchers:
+      - label_name: __name__
+        matcher_type: =
+        label_value: prometheus_engine_queries
+      - label_name: job
+        matcher_type: =
+        label_value: prometheus
+    aggregations:
+#      - sum
+      - avg
+#      - first
+#      - last
+#      - median
+#      - mode
+#      - min
+#      - max
+#      - random
+#      - stddev
+#      - sumsq
+#      - count
+#      - p90
+
+#  - job_name: downsample test
+#    matchers:
+#      - label_name: job # {job=~promethe.+},将窗口内的点统一sum
+#        label_value: promethe.+
+#        matcher_type: =~
+#      - label_name: __name__  # {__name__=prom_rw_shard_series_drop_counter},将窗口内的点统一avg
+#        label_value: prometheus_engine_queries
+#        matcher_type: =
+#    aggregations:
+#      - count
+#      - last
+
+proxy_config:
+  listen_addr: :9119
+  prometheus_addr: http://10.0.0.105:9090/
+  proxy_metrics:
+    - metric_name: prometheus_tsdb_head_chunks
+      aggregation: avg
