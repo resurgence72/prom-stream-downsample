@@ -83,12 +83,17 @@ func main() {
 
 	if global.EnabledDownSample {
 		writeCh := make(chan []prompb.TimeSeries, 1024)
-		p8s := prometheus.NewPrometheus(
+		p8s, err := prometheus.NewPrometheus(
 			global.Prometheus.RemoteReadUrl,
 			global.Prometheus.RemoteWriteUrl,
 			global.EnabledStream,
 			writeCh,
 		)
+		if err != nil {
+			cancel()
+			logrus.WithField("error", err).Fatalln("init prometheus failed")
+		}
+
 		go p8s.StartRemoteWrite(ctx)
 
 		ds := downsample.NewDownSampleMgr(
