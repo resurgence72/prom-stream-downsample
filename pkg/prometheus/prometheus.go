@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"net/url"
+
 	"prom-stream-downsample/pkg/pb"
 
 	"github.com/prometheus/prometheus/prompb"
@@ -35,29 +36,36 @@ func NewPrometheus(
 	rw string,
 	enabled bool,
 	writeCh chan []prompb.TimeSeries,
-) *Prometheus {
+) (*Prometheus, error) {
 	p8s := &Prometheus{
 		remoteReadURL:  rr,
 		remoteWriteURL: rw,
 		enabledStream:  enabled,
 		writeCh:        writeCh,
 	}
+	supported, err := p8s.versionSupportStreamRemoteRead()
+	if err != nil {
+		return nil, err
+	}
 
 	// 如果当前指定的是 sample 传输，但版本支持流式传输，则强制开启流式传输功能
-	if !p8s.enabledStream && p8s.versionSupportStreamRemoteRead() {
+	if !p8s.enabledStream && supported {
 		p8s.enabledStream = true
 	}
 	p8s.remoteReadType = pb.RemoteReadType[p8s.enabledStream]
-	return p8s
+	return p8s, nil
 }
 
-func (p *Prometheus) versionSupportStreamRemoteRead() bool {
+func (p *Prometheus) versionSupportStreamRemoteRead() (bool, error) {
 	u, _ := url.Parse(p.remoteReadURL)
-	info, _ := NewPrometheusMetaInfo(u.Scheme + "://" + u.Host + "/")
+	info, err := NewPrometheusMetaInfo(u.Scheme + "://" + u.Host + "/")
+	if err != nil {
+		return false, err
+	}
 
 	// 如果当前版本号大于2.13.0，则开启自动流式传输
 	if semver.Compare(semver.Build(info.Version), "2.13.0") >= 0 {
 		return true
 	}
-	return false
+	return false, nil
 }
