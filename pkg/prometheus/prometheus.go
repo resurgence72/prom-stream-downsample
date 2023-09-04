@@ -65,7 +65,7 @@ func (p *Prometheus) versionSupportStreamRemoteRead() (bool, error) {
 
 	// 如果当前版本号大于2.13.0，则开启自动流式传输
 	if semver.Compare(semver.Build(info.Version), "2.13.0") >= 0 {
-		return true
+		return true, nil
 	}
 	return false, nil
 }
