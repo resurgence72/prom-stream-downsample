@@ -200,19 +200,26 @@ func (ds *DownSample) downsample(idx int) {
 			default:
 			}
 
+			// 降采点的时间默认为原始点的中位
+			ts := calculateTime(d)
 			// 2. 根据downsample的 aggregations 配置，对数据进行聚合
 			//var series []prompb.TimeSeries
 			for _, agg := range ds.Aggs {
-				res := agg.Aggregate(d.Points)
-				sample := prompb.Sample{
-					Value:     res,
-					Timestamp: now,
+				if agg.Name() == "lttb" {
+					ds.append(prompb.TimeSeries{
+						Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, agg.Name()),
+						Samples: agg.Aggregate(d.Points).([]prompb.Sample),
+					})
+				} else {
+					sample := prompb.Sample{
+						Value:     agg.Aggregate(d.Points).(float64),
+						Timestamp: ts,
+					}
+					ds.append(prompb.TimeSeries{
+						Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, agg.Name()),
+						Samples: []prompb.Sample{sample},
+					})
 				}
-
-				ds.append(prompb.TimeSeries{
-					Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, agg.Name()),
-					Samples: []prompb.Sample{sample},
-				})
 			}
 		}
 	} else {
@@ -309,23 +316,37 @@ func (ds *DownSample) downsample(idx int) {
 			ds.appendDot(float64(sampleCnt), now, interval.IntervalName, span, matchers...)
 			// 为每一个series都采用当前的agg进行聚合
 			for _, d := range data {
-				res := agg.Aggregate(d.Points)
-
-				sample := prompb.Sample{
-					Value:     res,
-					Timestamp: now,
+				if agg.Name() == "lttb" {
+					ds.append(prompb.TimeSeries{
+						Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, agg.Name()),
+						Samples: agg.Aggregate(d.Points).([]prompb.Sample),
+					})
+				} else {
+					sample := prompb.Sample{
+						Value:     agg.Aggregate(d.Points).(float64),
+						Timestamp: calculateTime(d),
+					}
+					ds.append(prompb.TimeSeries{
+						Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, agg.Name()),
+						Samples: []prompb.Sample{sample},
+					})
 				}
-
-				ds.append(prompb.TimeSeries{
-					Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, agg.Name()),
-					Samples: []prompb.Sample{sample},
-				})
 			}
 		}
 	}
 
 	// 3. 将聚合后的数据 remote write 写入prometheus
 	ds.submit()
+}
+
+func calculateTime(series pb.TimeSeries) int64 {
+	points := series.Points
+	middle := len(points) / 2
+
+	if len(points)%2 == 0 {
+		return (points[middle-1].Timestamp + points[middle].Timestamp) / 2
+	}
+	return points[middle].Timestamp
 }
 
 func (ds *DownSample) appendDot(

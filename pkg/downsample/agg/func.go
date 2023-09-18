@@ -6,6 +6,9 @@ import (
 	"sort"
 	"time"
 
+	lb "github.com/dgryski/go-lttb"
+	"github.com/prometheus/prometheus/prompb"
+
 	"prom-stream-downsample/pkg/pb"
 )
 
@@ -29,9 +32,30 @@ var aggFnMap = map[string]AggFn{
 	"p95":    p95,
 	"p99":    p99,
 	"p999":   p999,
+	"lttb":   lttb,
 }
 
-func rate(points []pb.Point) float64 {
+func lttb(points []pb.Point) any {
+	pts := make([]lb.Point[float64], 0, len(points))
+	for _, p := range points {
+		pts = append(pts, lb.Point[float64]{X: float64(p.Timestamp), Y: p.Value})
+	}
+
+	// 将点数量通过lttb算法压缩10倍
+	// 1m 一个point, 降采30m -> 30/10=3个点
+	pts = lb.LTTB(pts, len(points)/10)
+	samples := make([]prompb.Sample, 0, len(pts))
+
+	for _, p := range pts {
+		samples = append(samples, prompb.Sample{
+			Timestamp: int64(p.X),
+			Value:     p.Y,
+		})
+	}
+	return samples
+}
+
+func rate(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -42,7 +66,7 @@ func rate(points []pb.Point) float64 {
 	return (points[len(points)-1].Value - points[0].Value) / float64(points[len(points)-1].Timestamp-points[0].Timestamp)
 }
 
-func mode(points []pb.Point) float64 {
+func mode(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -63,7 +87,7 @@ func mode(points []pb.Point) float64 {
 	return modeN
 }
 
-func random(points []pb.Point) float64 {
+func random(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -72,19 +96,19 @@ func random(points []pb.Point) float64 {
 	return points[rand.Intn(len(points))].Value
 }
 
-func p999(points []pb.Point) float64 {
+func p999(points []pb.Point) any {
 	return quantile(points, .999)
 }
 
-func p99(points []pb.Point) float64 {
+func p99(points []pb.Point) any {
 	return quantile(points, .99)
 }
 
-func p95(points []pb.Point) float64 {
+func p95(points []pb.Point) any {
 	return quantile(points, .95)
 }
 
-func quantile(points []pb.Point, q float64) float64 {
+func quantile(points []pb.Point, q float64) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -99,15 +123,15 @@ func quantile(points []pb.Point, q float64) float64 {
 	return points[int(float64(len(points))*q)].Value
 }
 
-func p90(points []pb.Point) float64 {
+func p90(points []pb.Point) any {
 	return quantile(points, .9)
 }
 
-func p50(points []pb.Point) float64 {
+func p50(points []pb.Point) any {
 	return quantile(points, .5)
 }
 
-func sumsq(points []pb.Point) float64 {
+func sumsq(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -120,7 +144,7 @@ func sumsq(points []pb.Point) float64 {
 	return res
 }
 
-func stddev(points []pb.Point) float64 {
+func stddev(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -139,21 +163,21 @@ func stddev(points []pb.Point) float64 {
 	return math.Sqrt(n / float64(len(points)))
 }
 
-func last(points []pb.Point) float64 {
+func last(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
 	return points[len(points)-1].Value
 }
 
-func first(points []pb.Point) float64 {
+func first(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
 	return points[0].Value
 }
 
-func median(points []pb.Point) float64 {
+func median(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -173,7 +197,7 @@ func median(points []pb.Point) float64 {
 	}
 }
 
-func max(points []pb.Point) float64 {
+func max(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -188,7 +212,7 @@ func max(points []pb.Point) float64 {
 	return res
 }
 
-func min(points []pb.Point) float64 {
+func min(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
@@ -203,22 +227,22 @@ func min(points []pb.Point) float64 {
 	return res
 }
 
-func count(points []pb.Point) float64 {
+func count(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
 	return float64(len(points))
 }
 
-func avg(points []pb.Point) float64 {
+func avg(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}
 
-	return sum(points) / float64(len(points))
+	return sum(points).(float64) / float64(len(points))
 }
 
-func sum(points []pb.Point) float64 {
+func sum(points []pb.Point) any {
 	if len(points) == 0 {
 		return 0
 	}

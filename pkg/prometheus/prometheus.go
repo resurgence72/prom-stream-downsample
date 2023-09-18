@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"net/url"
+
 	"prom-stream-downsample/pkg/pb"
 
 	"github.com/prometheus/prometheus/prompb"

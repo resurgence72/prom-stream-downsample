@@ -6,7 +6,7 @@ import (
 	"prom-stream-downsample/pkg/pb"
 )
 
-type AggFn func([]pb.Point) float64
+type AggFn func([]pb.Point) any
 
 type Agg struct {
 	name string
@@ -22,7 +22,7 @@ func NewAgg(name string) (Agg, error) {
 	return Agg{name: name, fn: fn}, nil
 }
 
-func (a Agg) Aggregate(points []pb.Point) float64 {
+func (a Agg) Aggregate(points []pb.Point) any {
 	return a.fn(points)
 }
 

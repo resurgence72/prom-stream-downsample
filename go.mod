@@ -3,6 +3,7 @@ module prom-stream-downsample
 go 1.20
 
 require (
+	github.com/dgryski/go-lttb v0.0.0-20230207170358-f8fc36cdbff1
 	github.com/dlclark/regexp2 v1.10.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
