@@ -48,8 +48,8 @@ func (p *Prometheus) RemoteRead(
 	}
 
 	if p.enabledStream {
-		// 切换流式请求协议
-		req.AcceptedResponseTypes = []prompb.ReadRequest_ResponseType{prompb.ReadRequest_STREAMED_XOR_CHUNKS}
+		// append流式请求协议支持
+		req.AcceptedResponseTypes = append(req.AcceptedResponseTypes, prompb.ReadRequest_STREAMED_XOR_CHUNKS)
 	}
 
 	// 将请求编码成Snappy压缩的protobuf格式
