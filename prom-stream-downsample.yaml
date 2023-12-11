@@ -5,7 +5,8 @@ global_config:
   enabled_metric_reuse: true # 是否开启指标重用(下一级采样会用上一级的数据)
 
   prometheus:
-    remote_read_url: http://172.18.12.38:9090/api/v1/read  # row data 读地址
+    remote_read_group:
+      - http://172.18.12.38:9090/api/v1/read  # row data 读地址
     remote_write_url: http://172.18.12.38:9090/api/v1/write # downsample 结果写入地址
   resolutions:
     - 5m,20m
