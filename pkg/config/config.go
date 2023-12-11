@@ -165,6 +165,6 @@ func (d *DownSampleConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 type Prometheus struct {
-	RemoteReadUrl  string `yaml:"remote_read_url"`
-	RemoteWriteUrl string `yaml:"remote_write_url"`
+	RemoteReadGroup []string `yaml:"remote_read_group"`
+	RemoteWriteUrl  string   `yaml:"remote_write_url"`
 }
