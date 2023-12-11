@@ -1,6 +1,6 @@
 module prom-stream-downsample
 
-go 1.20
+go 1.21.5
 
 require (
 	github.com/dgryski/go-lttb v0.0.0-20230207170358-f8fc36cdbff1
