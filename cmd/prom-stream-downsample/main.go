@@ -84,7 +84,7 @@ func main() {
 	if global.EnabledDownSample {
 		writeCh := make(chan []prompb.TimeSeries, 1024)
 		p8s, err := prometheus.NewPrometheus(
-			global.Prometheus.RemoteReadUrl,
+			global.Prometheus.RemoteReadGroup,
 			global.Prometheus.RemoteWriteUrl,
 			global.EnabledStream,
 			writeCh,
