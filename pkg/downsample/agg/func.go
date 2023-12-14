@@ -36,6 +36,12 @@ var aggFnMap = map[string]AggFn{
 }
 
 func lttb(points []pb.Point) any {
+	downsampleNeedPointCnt := len(points) / 10
+	if downsampleNeedPointCnt == 0 {
+		// 点过少
+		return nil
+	}
+
 	pts := make([]lb.Point[float64], 0, len(points))
 	for _, p := range points {
 		pts = append(pts, lb.Point[float64]{X: float64(p.Timestamp), Y: p.Value})
@@ -43,7 +49,7 @@ func lttb(points []pb.Point) any {
 
 	// 将点数量通过lttb算法压缩10倍
 	// 1m 一个point, 降采30m -> 30/10=3个点
-	pts = lb.LTTB(pts, len(points)/10)
+	pts = lb.LTTB(pts, downsampleNeedPointCnt)
 	samples := make([]prompb.Sample, 0, len(pts))
 
 	for _, p := range pts {
