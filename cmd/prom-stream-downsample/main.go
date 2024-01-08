@@ -128,7 +128,8 @@ func main() {
 		pxy, err := proxy.NewProxy(
 			r,
 			global.Resolutions.Rs,
-			pxyCfg.PrometheusAddr,
+			proxy.ParserDataSources(pxyCfg.DataSources),
+			//pxyCfg.PrometheusAddr,
 			func() pb.MetricProxySet {
 				mps := make(pb.MetricProxySet, len(pxyCfg.ProxyMetrics))
 				for _, pm := range config.Get().ProxyConfig.ProxyMetrics {
