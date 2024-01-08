@@ -1,5 +1,5 @@
 global_config:
-#  enabled_stream: true # 是否开启流式传输
+  enabled_stream: true # 是否开启流式传输
   enabled_proxy: false
   enabled_downsample: true
   enabled_metric_reuse: true # 是否开启指标重用(下一级采样会用上一级的数据)
@@ -52,7 +52,10 @@ downsample_config:
 
 proxy_config:
   listen_addr: :9119
-  prometheus_addr: http://10.0.0.105:9090/
+  data_sources:
+    row: http://10.0.0.105:9090/
+    downsample: http://10.0.0.105:9119/
+#  prometheus_addr: http://10.0.0.105:9090/
   proxy_metrics:
     - metric_name: prometheus_tsdb_head_chunks
       aggregation: avg
