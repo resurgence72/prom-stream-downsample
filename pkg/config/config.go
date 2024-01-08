@@ -76,9 +76,15 @@ type Metric struct {
 }
 
 type ProxyConfig struct {
-	ListenAddr     string   `yaml:"listen_addr"`
-	PrometheusAddr string   `yaml:"prometheus_addr"`
-	ProxyMetrics   []Metric `yaml:"proxy_metrics"`
+	ListenAddr string `yaml:"listen_addr"`
+	//PrometheusAddr string   `yaml:"prometheus_addr"`
+	DataSources  DataSources `yaml:"data_sources"`
+	ProxyMetrics []Metric    `yaml:"proxy_metrics"`
+}
+
+type DataSources struct {
+	Row        string `yaml:"row"`
+	Downsample string `yaml:"downsample"`
 }
 
 type PromStreamDownSampleConfig struct {
