@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/mod/semver"
 
+	"prom-stream-downsample/pkg/config"
 	"prom-stream-downsample/pkg/pb"
 	p8s "prom-stream-downsample/pkg/prometheus"
 
@@ -46,9 +47,11 @@ type QueryParams struct {
 
 type Proxy struct {
 	resolutions []pb.ResolutionSet
-	proxyPath   string
-	flushProxy  func() pb.MetricProxySet
-	mps         pb.MetricProxySet
+	//proxyPath   string
+	rowProxyPath        string
+	downsampleProxyPath string
+	flushProxy          func() pb.MetricProxySet
+	mps                 pb.MetricProxySet
 
 	r      *gin.Engine
 	lock   sync.Mutex
@@ -61,10 +64,18 @@ type Proxy struct {
 	proxyDownsampleTotalCounter prometheus.CounterVec
 }
 
+func ParserDataSources(dataSources config.DataSources) config.DataSources {
+	if len(dataSources.Downsample) == 0 {
+		dataSources.Downsample = dataSources.Row
+	}
+	return dataSources
+}
+
 func NewProxy(
 	r *gin.Engine,
 	rs []pb.ResolutionSet,
-	proxyPath string,
+	//proxyPath string,
+	dataSources config.DataSources,
 	fn func() pb.MetricProxySet,
 	ch chan chan error,
 ) (*Proxy, error) {
@@ -74,10 +85,12 @@ func NewProxy(
 	pxy := &Proxy{
 		r:           r,
 		resolutions: rs,
-		proxyPath:   proxyPath,
-		flushProxy:  fn,
-		mps:         fn(),
-		reload:      ch,
+		//proxyPath:   proxyPath,
+		rowProxyPath:        dataSources.Row,
+		downsampleProxyPath: dataSources.Downsample,
+		flushProxy:          fn,
+		mps:                 fn(),
+		reload:              ch,
 		proxyTotalCounter: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "psd_proxy_total",
 			Help: "The total number of requests to proxy",
@@ -98,7 +111,7 @@ func NewProxy(
 }
 
 func (p *Proxy) metaInfo() error {
-	info, err := p8s.NewPrometheusMetaInfo(p.proxyPath)
+	info, err := p8s.NewPrometheusMetaInfo(p.downsampleProxyPath)
 	if err != nil {
 		return err
 	}
@@ -108,7 +121,7 @@ func (p *Proxy) metaInfo() error {
 		p.prometheusSupportLookBackDelta = true
 	}
 
-	logrus.Warnf("proxy prometheus [%s] version: [%s], LookBackDelta: [%s]\n", p.proxyPath, info.Version, info.QueryLookBackDelta)
+	logrus.Warnf("proxy prometheus [%s] version: [%s], LookBackDelta: [%s]\n", p.downsampleProxyPath, info.Version, info.QueryLookBackDelta)
 	p.prometheusInfo = info
 	return nil
 }
@@ -149,7 +162,8 @@ func (p *Proxy) injectOtherRouter() {
 }
 
 func (p *Proxy) StartProxy() {
-	proxyUrl, _ := url.Parse(p.proxyPath)
+	rowProxyUrl, _ := url.Parse(p.rowProxyPath)
+	downsampleProxyUrl, _ := url.Parse(p.downsampleProxyPath)
 
 	p.injectOtherRouter()
 	apiV1 := p.r.Group(apiV1Prefix)
@@ -160,7 +174,7 @@ func (p *Proxy) StartProxy() {
 		if c.Request.URL.Path != instantQueryPath &&
 			c.Request.URL.Path != rangeQueryPath {
 			c.Request.URL.Path = apiV1Prefix + c.Param("name")
-			httputil.NewSingleHostReverseProxy(proxyUrl).ServeHTTP(c.Writer, c.Request)
+			httputil.NewSingleHostReverseProxy(rowProxyUrl).ServeHTTP(c.Writer, c.Request)
 			return
 		}
 
@@ -208,7 +222,14 @@ func (p *Proxy) StartProxy() {
 
 		// 设置请求体
 		p.setRequest(c.Request, c.Request.Method, v.Encode())
+
 		// 转发请求
+		var proxyUrl *url.URL
+		if replaceR.needChangeLookBackDelta {
+			proxyUrl = downsampleProxyUrl
+		} else {
+			proxyUrl = rowProxyUrl
+		}
 		httputil.NewSingleHostReverseProxy(proxyUrl).ServeHTTP(c.Writer, c.Request)
 	})
 }
