@@ -39,7 +39,7 @@ func lttb(points []pb.Point) any {
 	downsampleNeedPointCnt := len(points) / 10
 	if downsampleNeedPointCnt == 0 {
 		// 点过少
-		return nil
+		return []prompb.Sample{}
 	}
 
 	pts := make([]lb.Point[float64], 0, len(points))
