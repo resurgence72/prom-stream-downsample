@@ -84,8 +84,8 @@ func NewDownSampleMgr(ctx context.Context, ch chan []prompb.TimeSeries, p8s *pro
 }
 
 func (dsm *DownSampleMgr) Start() {
-	for _, ds := range dsm.DownSamples {
-		go ds.Start(dsm.ctx)
+	for i := range dsm.DownSamples {
+		go dsm.DownSamples[i].Start(dsm.ctx)
 	}
 }
 
@@ -145,7 +145,7 @@ func (ds *DownSample) downsample(idx int) {
 	}
 
 	interval := ds.resolutions[idx]
-	now := time.Now().UnixMilli()
+	//now := time.Now().UnixMilli()
 	span := &pb.DurationSpan{}
 
 	/*
@@ -178,7 +178,7 @@ func (ds *DownSample) downsample(idx int) {
 			Value: ".+:downsample_.+",
 		})
 
-		data, sampleCnt, err := ds.prometheus.RemoteRead(
+		it, err := ds.prometheus.RemoteRead(
 			span,
 			time.Duration(interval.IntervalValue),
 			matchers...,
@@ -187,36 +187,32 @@ func (ds *DownSample) downsample(idx int) {
 			logrus.WithError(err).Error("remote read error")
 			return
 		}
-		if sampleCnt == 0 {
-			return
-		}
 
-		// 指标打点
-		ds.appendDot(float64(sampleCnt), now, interval.IntervalName, span, matchers...)
-		for _, d := range data {
+		for it.Next() {
 			select {
 			case <-ds.quit:
 				return
 			default:
 			}
 
+			d := it.At()
 			// 降采点的时间默认为原始点的中位
 			ts := calculateTime(d)
 			// 2. 根据downsample的 aggregations 配置，对数据进行聚合
 			//var series []prompb.TimeSeries
-			for _, agg := range ds.Aggs {
-				if agg.Name() == "lttb" {
+			for _, aggF := range ds.Aggs {
+				if aggF.Name() == "lttb" {
 					ds.append(prompb.TimeSeries{
-						Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, agg.Name()),
-						Samples: agg.Aggregate(d.Points).([]prompb.Sample),
+						Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, aggF.Name()),
+						Samples: aggF.Aggregate(d.Points).([]prompb.Sample),
 					})
 				} else {
 					sample := prompb.Sample{
-						Value:     agg.Aggregate(d.Points).(float64),
+						Value:     aggF.Aggregate(d.Points).(float64),
 						Timestamp: ts,
 					}
 					ds.append(prompb.TimeSeries{
-						Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, agg.Name()),
+						Labels:  d.ToTimeSeriesPbLabel("", interval.IntervalName, aggF.Name()),
 						Samples: []prompb.Sample{sample},
 					})
 				}
@@ -227,7 +223,7 @@ func (ds *DownSample) downsample(idx int) {
 		// 每次请求都会单独调用agg,请求次数会变多
 		// 获取需要重用的 resolution; 比如当前是 20m 的聚合，这里就需要重用上一个 5m 的聚合
 		resueRset := ds.resolutions[idx-1].IntervalName
-		for _, agg := range ds.Aggs {
+		for _, aggF := range ds.Aggs {
 			select {
 			case <-ds.quit:
 				return
@@ -238,7 +234,7 @@ func (ds *DownSample) downsample(idx int) {
 				hasNameLabel, nameTypeISRe bool
 				nameType, nameValue        string
 
-				downsampleStr    = fmt.Sprintf(":downsample_%s_%s", resueRset, agg.Name())
+				downsampleStr    = fmt.Sprintf(":downsample_%s_%s", resueRset, aggF.Name())
 				downsampleRegStr = ".*" + downsampleStr
 
 				matchers      []pb.Matcher
@@ -298,7 +294,7 @@ func (ds *DownSample) downsample(idx int) {
 
 			// append 将上述处理的 expandMatcher 添加到 matchers 中
 			matchers = append(matchers, expandMatcher)
-			data, sampleCnt, err := ds.prometheus.RemoteRead(
+			it, err := ds.prometheus.RemoteRead(
 				span,
 				time.Duration(interval.IntervalValue),
 				matchers...,
@@ -308,26 +304,21 @@ func (ds *DownSample) downsample(idx int) {
 				continue
 			}
 
-			if sampleCnt == 0 {
-				continue
-			}
+			for it.Next() {
+				d := it.At()
 
-			// 指标打点
-			ds.appendDot(float64(sampleCnt), now, interval.IntervalName, span, matchers...)
-			// 为每一个series都采用当前的agg进行聚合
-			for _, d := range data {
-				if agg.Name() == "lttb" {
+				if aggF.Name() == "lttb" {
 					ds.append(prompb.TimeSeries{
-						Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, agg.Name()),
-						Samples: agg.Aggregate(d.Points).([]prompb.Sample),
+						Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, aggF.Name()),
+						Samples: aggF.Aggregate(d.Points).([]prompb.Sample),
 					})
 				} else {
 					sample := prompb.Sample{
-						Value:     agg.Aggregate(d.Points).(float64),
+						Value:     aggF.Aggregate(d.Points).(float64),
 						Timestamp: calculateTime(d),
 					}
 					ds.append(prompb.TimeSeries{
-						Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, agg.Name()),
+						Labels:  d.ToTimeSeriesPbLabel(ds.resolutions[idx-1].IntervalName, interval.IntervalName, aggF.Name()),
 						Samples: []prompb.Sample{sample},
 					})
 				}
