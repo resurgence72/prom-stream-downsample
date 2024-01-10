@@ -5,10 +5,11 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"prom-stream-downsample/pkg/pb"
 	"runtime"
 	"sync"
 	"time"
+
+	"prom-stream-downsample/pkg/pb"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
@@ -47,8 +48,10 @@ func (p *Prometheus) StartRemoteWrite(ctx context.Context) {
 				default:
 				}
 
-				p.send(batch)
-				p.putBuffer(batch)
+				if len(batch) > 0 {
+					p.send(batch)
+					p.putBuffer(batch)
+				}
 			}
 		}()
 	}
