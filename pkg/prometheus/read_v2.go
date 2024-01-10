@@ -6,7 +6,6 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
 
 	"prom-stream-downsample/pkg/pb"
 )
@@ -15,7 +14,7 @@ func (p *Prometheus) remoteReadV2(
 	span *pb.DurationSpan,
 	interval time.Duration,
 	matchers ...pb.Matcher,
-) ([]pb.TimeSeries, int64, error) {
+) (Iterator, error) {
 	end := time.Now()
 	start := end.Add(-interval)
 
@@ -49,7 +48,7 @@ func (p *Prometheus) remoteReadV2(
 	}
 }
 
-func (p *Prometheus) streamRemoteReadV2(span *pb.DurationSpan, start time.Time, end time.Time, mtcs []*labels.Matcher) ([]pb.TimeSeries, int64, error) {
+func (p *Prometheus) streamRemoteReadV2(span *pb.DurationSpan, start time.Time, end time.Time, mtcs []*labels.Matcher) (Iterator, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	defer cancel()
 
@@ -57,7 +56,7 @@ func (p *Prometheus) streamRemoteReadV2(span *pb.DurationSpan, start time.Time, 
 	for _, queryable := range p.queryables {
 		q, err := queryable.ChunkQuerier(ctx, start.UnixMilli(), end.UnixMilli())
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		queriers = append(queriers, q)
 	}
@@ -68,53 +67,10 @@ func (p *Prometheus) streamRemoteReadV2(span *pb.DurationSpan, start time.Time, 
 		mtcs...,
 	)
 
-	var (
-		tsSet     []pb.TimeSeries
-		sampleCnt int64
-	)
-
-	for ss.Next() {
-		series := ss.At()
-		lbs := series.Labels()
-		it := series.Iterator(nil)
-
-		var timeseries pb.TimeSeries
-		for _, lb := range lbs {
-			timeseries.Labels = append(timeseries.Labels, pb.Label{
-				Name:  lb.Name,
-				Value: lb.Value,
-			})
-		}
-
-		for it.Next() {
-			chk := it.At().Chunk
-			if chk.Encoding().String() != "XOR" {
-				break
-			}
-
-			itt := chk.Iterator(nil)
-			for itt.Next() != chunkenc.ValNone {
-				ts, val := itt.At()
-				timeseries.Points = append(timeseries.Points, pb.Point{
-					Timestamp: ts,
-					Value:     val,
-				})
-
-				sampleCnt++
-			}
-		}
-
-		if it.Err() != nil {
-			return nil, 0, it.Err()
-		}
-
-		tsSet = append(tsSet, timeseries)
-	}
-
-	return tsSet, sampleCnt, nil
+	return &StreamIterator{css: ss}, nil
 }
 
-func (p *Prometheus) sampleRemoteReadV2(span *pb.DurationSpan, start, end time.Time, matchers []*labels.Matcher) ([]pb.TimeSeries, int64, error) {
+func (p *Prometheus) sampleRemoteReadV2(span *pb.DurationSpan, start, end time.Time, matchers []*labels.Matcher) (Iterator, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	defer cancel()
 
@@ -122,7 +78,7 @@ func (p *Prometheus) sampleRemoteReadV2(span *pb.DurationSpan, start, end time.T
 	for _, queryable := range p.queryables {
 		q, err := queryable.Querier(ctx, start.UnixMilli(), end.UnixMilli())
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		queriers = append(queriers, q)
 	}
@@ -133,40 +89,5 @@ func (p *Prometheus) sampleRemoteReadV2(span *pb.DurationSpan, start, end time.T
 		matchers...,
 	)
 
-	var (
-		tsSet     []pb.TimeSeries
-		sampleCnt int64
-	)
-
-	for ss.Next() {
-		series := ss.At()
-		lbs := series.Labels()
-		it := series.Iterator(nil)
-
-		var timeseries pb.TimeSeries
-		for _, lb := range lbs {
-			timeseries.Labels = append(timeseries.Labels, pb.Label{
-				Name:  lb.Name,
-				Value: lb.Value,
-			})
-		}
-
-		for it.Next() == chunkenc.ValFloat {
-			ts, val := it.At()
-			timeseries.Points = append(timeseries.Points, pb.Point{
-				Timestamp: ts,
-				Value:     val,
-			})
-
-			sampleCnt++
-		}
-
-		if it.Err() != nil {
-			return nil, 0, it.Err()
-		}
-
-		tsSet = append(tsSet, timeseries)
-	}
-
-	return tsSet, sampleCnt, nil
+	return &SampleIterator{ss: ss}, nil
 }
