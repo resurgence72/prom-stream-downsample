@@ -2,6 +2,7 @@ package pb
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -61,26 +62,24 @@ func (is Intervals) Swap(i, j int) {
 type Intervals []Interval
 
 type MetricProxy struct {
-	Metric string
-	Agg    string
+	Metric   string
+	MetricRe *regexp.Regexp
+	Agg      string
 }
 
-type MetricProxySet map[string]MetricProxy
+type MetricProxySet map[*regexp.Regexp]MetricProxy
 
-func (m MetricProxySet) Contains(s string) (MetricProxy, bool) {
+func (m MetricProxySet) Contains(s string) (MetricProxy, string, bool) {
 	// 先基于map进行查找,因为大部分场景下 __name__ 都是一个
 	// 少部分场景下会使用 __name__=~"abc|bcd" 等正则
-	if mp, ok := m[s]; ok {
-		return mp, ok
-	}
 
-	// 如果没有找到，那么就需要遍历一遍 判断是否包含指定字符串
-	for k := range m {
-		if strings.Contains(s, k) {
-			return m[k], true
+	for reg, mp := range m {
+		if reg.MatchString(s) {
+			return mp, s, true
 		}
 	}
-	return MetricProxy{}, false
+
+	return MetricProxy{}, s, false
 }
 
 type DurationSpan struct {
