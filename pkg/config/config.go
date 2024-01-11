@@ -71,13 +71,12 @@ func load(bytes []byte) (*PromStreamDownSampleConfig, error) {
 }
 
 type Metric struct {
-	MetricName  string `yaml:"metric_name"`
-	Aggregation string `yaml:"aggregation"`
+	MetricNameRe string `yaml:"metric_name_re"`
+	Aggregation  string `yaml:"aggregation"`
 }
 
 type ProxyConfig struct {
-	ListenAddr string `yaml:"listen_addr"`
-	//PrometheusAddr string   `yaml:"prometheus_addr"`
+	ListenAddr   string      `yaml:"listen_addr"`
 	DataSources  DataSources `yaml:"data_sources"`
 	ProxyMetrics []Metric    `yaml:"proxy_metrics"`
 }
