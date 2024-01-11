@@ -34,7 +34,7 @@ func (p *Proxy) rangeQueryReplace(
 		switch n := node.(type) {
 		case *parser.MatrixSelector:
 			vector := n.VectorSelector.(*parser.VectorSelector)
-			_, metricFind := p.checkMetricName(vector)
+			_, _, metricFind := p.checkMetricName(vector)
 			if !metricFind {
 				return nil
 			}
@@ -56,14 +56,14 @@ func (p *Proxy) rangeQueryReplace(
 			}
 		case *parser.VectorSelector:
 			//  判断query中是否需要替换metric
-			mp, metricFind := p.checkMetricName(n)
+			mp, metricName, metricFind := p.checkMetricName(n)
 			if !metricFind {
 				return nil
 			}
 
 			replaced = true
 			// 替换metric
-			p.injectReplacedMetric(n, mp.Metric, mp.Agg, rset.StringInterval)
+			p.injectReplacedMetric(n, metricName, mp.Agg, rset.StringInterval)
 		case *parser.SubqueryExpr:
 		case *parser.Call:
 		default:
@@ -100,7 +100,7 @@ func (p *Proxy) instantQueryReplace(query string) string {
 			vector := n.VectorSelector.(*parser.VectorSelector)
 			// 例如: up[1m] 获取 sum(rate(up[1m])) 中的 up[1m]，需要对up进行替换
 			// 1. 首先要判断当前的 __name__ 是否需要替换
-			mp, metricFind := p.checkMetricName(vector)
+			mp, metricName, metricFind := p.checkMetricName(vector)
 
 			// 2. 判断当前range vector 的窗口是否符合替换规则
 			rset, resolutionFind := p.checkResolution(n.Range, instantQ)
@@ -111,7 +111,7 @@ func (p *Proxy) instantQueryReplace(query string) string {
 
 			replaced = true
 			// 3. 进行指标替换
-			p.injectReplacedMetric(vector, mp.Metric, mp.Agg, rset.StringInterval)
+			p.injectReplacedMetric(vector, metricName, mp.Agg, rset.StringInterval)
 		case *parser.SubqueryExpr:
 		case *parser.Call:
 		default:
@@ -127,7 +127,7 @@ func (p *Proxy) instantQueryReplace(query string) string {
 	return expr.String()
 }
 
-func (p *Proxy) checkMetricName(vector *parser.VectorSelector) (pb.MetricProxy, bool) {
+func (p *Proxy) checkMetricName(vector *parser.VectorSelector) (pb.MetricProxy, string, bool) {
 	// 例如: up[1m] 获取 sum(rate(up[1m])) 中的 up[1m]，需要对up进行替换
 	// 判断当前的 __name__ 是否需要替换
 	for _, matcher := range vector.LabelMatchers {
@@ -135,7 +135,7 @@ func (p *Proxy) checkMetricName(vector *parser.VectorSelector) (pb.MetricProxy, 
 			return p.mps.Contains(matcher.Value)
 		}
 	}
-	return pb.MetricProxy{}, false
+	return pb.MetricProxy{}, "", false
 }
 
 func (p *Proxy) checkResolution(rge time.Duration, tp string) (*pb.ResolutionSet, bool) {
