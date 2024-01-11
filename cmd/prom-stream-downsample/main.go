@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"sort"
 	"syscall"
 	"time"
@@ -129,13 +130,14 @@ func main() {
 			r,
 			global.Resolutions.Rs,
 			proxy.ParserDataSources(pxyCfg.DataSources),
-			//pxyCfg.PrometheusAddr,
 			func() pb.MetricProxySet {
 				mps := make(pb.MetricProxySet, len(pxyCfg.ProxyMetrics))
 				for _, pm := range config.Get().ProxyConfig.ProxyMetrics {
-					mps[pm.MetricName] = pb.MetricProxy{
-						Metric: pm.MetricName,
-						Agg:    pm.Aggregation,
+					mp := pb.MetricProxy{Agg: pm.Aggregation}
+
+					if reg, err := regexp.Compile(pm.MetricNameRe); err == nil {
+						mp.MetricRe = reg
+						mps[mp.MetricRe] = mp
 					}
 				}
 				return mps
