@@ -55,7 +55,6 @@ proxy_config:
   data_sources:
     row: http://10.0.0.105:9090/
     downsample: http://10.0.0.105:9119/
-#  prometheus_addr: http://10.0.0.105:9090/
   proxy_metrics:
-    - metric_name: prometheus_tsdb_head_chunks
+    - metric_name_re: ^prometheus_tsdb_head_.+
       aggregation: avg
